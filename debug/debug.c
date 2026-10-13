@@ -3,11 +3,12 @@
 // keep this here so we dont get conlfict sceCtrl types
 #include <kubridge.h>
 
-int _debugEnabled = 1;
+int _debugEnabled = 0;
 
 void debugInit() 
 {
-    kuKernelLoadModule("ms0:/SEPLUGINS/debug_plugin_log.prx", 0, NULL);
+    if (_debugEnabled)
+        kuKernelLoadModule("ms0:/SEPLUGINS/debug_plugin_log.prx", 0, NULL);
 }
 
 uint8_t debugEnabed()
