@@ -6,7 +6,7 @@ A PSP plugin for POPS that adds *real* analog control, not just mapping the PSP'
 
 ## Installation
 
-* Download `POPSAnalog.zip`
+* Download `POPSAnalog.zip` from the [Latest Release](https://github.com/ste2425/POPS-Analog/releases/latest)
 * Extract `pops_analog.prx` and place it in `/SEPLUGINS`
 * Update the `PLUGINS.TXT` file and add the following line to the bottom
   * `pops, ms0:/seplugins/pops_analog.prx, 1`
