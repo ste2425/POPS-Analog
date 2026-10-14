@@ -107,6 +107,34 @@ static u32 *make_trampoline(void *kernel_func)
     return t;
 }
 
+// This is taken from ARK5 here: https://github.com/PSP-Arkfive/ARK-5/blob/a9b74547c0d1785cc77981462cf095bd5a76434f/SystemControl/src/sctrl_hen.c#L282
+// It does not appear to exist in ARK4 or any other CFW
+// Manually applying it so i am not locked into ARK5
+u32 _sctrlHENFindImportInMod(SceModule * mod, const char *library, u32 nid) {
+    // Invalid Arguments
+    if (mod == NULL || library == NULL) {
+        return 0;
+    }
+
+    for(int i = 0; i < mod->stub_size;) {
+        SceLibraryStubTable *stub = (SceLibraryStubTable *)(mod->stub_top + i);
+
+        if(stub->libname && strcmp(stub->libname, library) == 0) {
+            unsigned int *table = stub->nidtable;
+
+            for(int j = 0; j < stub->stubcount; j++) {
+                if(table[j] == nid) {
+                    return ((u32)stub->stubtable + (j * 8));
+                }
+            }
+        }
+
+        i += (stub->len * 4);
+    }
+
+    return 0;
+}
+
 static int on_start_module(SceModule *mod)
 {
     if (!mod || strcmp(mod->modname, "pops") != 0)
@@ -117,7 +145,7 @@ static int on_start_module(SceModule *mod)
     // Address of POPS's import stub
     // Use this to build the JAL instruction we modify later
     // sctrlHENFindImportInMod is a ARK5 and bove feature
-    u32 stub = sctrlHENFindImportInMod(mod, "sceCtrl", NID_sceCtrlPeekBufferNegative);
+    u32 stub = _sctrlHENFindImportInMod(mod, "sceCtrl", NID_sceCtrlPeekBufferNegative);
     if (stub == 0 || (stub & 0x80000000)) {
         debugLog("import lookup failed: %08x", stub);
         return 0;

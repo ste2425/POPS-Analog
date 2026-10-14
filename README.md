@@ -13,9 +13,18 @@ A PSP plugin for POPS that adds *real* analog control, not just mapping the PSP'
 
 ## Requirements
 
-This plugin requires `ARK-5` or higher. Behavior is unknown if running on a different CFW.
+This plugin does *not* have a specific CFW requirement. However for 6.61 (not sure if 6.60 had this too) different motherboard revisions had their own version of POPS. I have coalted a table of CFW, OFW and hardware variant's i have been able to test. 
 
-It *should* support all POPS versions. However i have only tested on a 1K and 2K.
+If you run this please contact me with the details from the `Known Working Environments` table and i will update it.
+
+## Known Working Environments
+
+| CFW | OFW | Motherboard Version |
+| -- | -- | -- |
+| LME-2.3 | 6.61 | TA-081v2 (01g) |
+| ARK-4 | 6.61 | TA-081v2 (01g) |
+| ARK-5 | 6.61 | TA-081v2 (01g) |
+| ARK-5 | 6.61 | TA-088v3 (02g) |
 
 ## PS1 Controller Configuration
 
