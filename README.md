@@ -19,6 +19,8 @@ If you run this please contact me with the details from the `Known Working Envir
 
 ## Known Working Environments
 
+ℹ️ - *Over the next few days i will try various combinations of CFW and OFW with the two PSP's i have and update the table below*
+
 | CFW | OFW | Motherboard Version |
 | -- | -- | -- |
 | LME-2.3 | 6.61 | TA-081v2 (01g) |
