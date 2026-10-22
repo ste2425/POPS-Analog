@@ -72,7 +72,7 @@ u32 *PATCHING_make_peekBuff_trampoline(void *kernel_func)
     // JAL's delay slot
     t[3] = NOP; 
 
-    MIPS_flush_tramp(t, TRAMP_PEEK__SIZE);
+    MIPS_flush_tramp(t, TRAMP_PEEK_SIZE);
 
     return t;
 }
