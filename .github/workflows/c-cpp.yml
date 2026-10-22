@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - '*'
+    tags: '**' # Trigger on tags for releases
   workflow_dispatch:
 
 jobs:
