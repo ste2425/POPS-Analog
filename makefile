@@ -1,5 +1,5 @@
 TARGET = pops_analog
-OBJS   = main.o exports.o debug/debug_plugin_log.o debug/debug.o
+OBJS   = main.o exports.o debug/debug_plugin_log.o debug/debug.o mips.o ark5.o patching.o
 
 PSP_FW_VERSION = 660
 

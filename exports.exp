@@ -8,6 +8,7 @@ PSP_EXPORT_END
 # For new syscalls
 PSP_EXPORT_START(popsAnalogPrivate, 0x0011, 0x4001)
 PSP_EXPORT_FUNC(patchPeekBufferNegative)
+PSP_EXPORT_FUNC(patchStoreButtons)
 PSP_EXPORT_END
 
 PSP_END_EXPORTS
