@@ -10,47 +10,107 @@
 #include <cfwmacros.h>
 #include <pspctrl.h>
 #include "debug/debug.h"
+#include "mips.h"
+#include "sceCtrl2.h"
+#include "ark5.h"
+#include "patching.h"
 
 PSP_MODULE_INFO("PopsAnalog", PSP_MODULE_KERNEL, 1, 0);
 
-#ifndef PSP_MEMORY_PARTITION_USER
-#define PSP_MEMORY_PARTITION_USER 2
-#endif
+sceCtrlPeekBufferNegative2_t _sceCtrlPeekBufferNegative2 = NULL;
 
-#define NID_sceCtrlPeekBufferNegative 0xC152080A
+#define PS1_L2_BIT 0x0100
+#define PS1_R2_BIT 0x0200
+#define PS1_R1_BIT 0x0800
+#define PS1_L1_BIT 0x0400
 
-// addu $a2, $s0, $zero - The instruction to move s0 to a2
-#define I_MOVE_A2_S0 0x02003021u
+// patchStoreButtons hook seems to run for all controller ports
+// whereas patchPeekBufferNegative only runs on port 1
+// so we keep track to ensure both hooks only run for port 1
+static u8 *volatile g_pad = NULL;
 
-#define TRAMP_SIZE 16
-
-/*
- * Kernel-side patch, reached via syscall. Must be non-static and exported.
- *
- * pad is POPS's $s0
- */
-int patchPeekBufferNegative(SceCtrlData *data, int numBufs, u8 *pad)
+// Runs right after POPS stores the PS1 btton data, after "sh $s1,0($s0)" has already executed
+// POPS overwites rather than merge so we can't do button assignment in patchPeekBufferNegative
+// The return value is ignored; the trampoline restores POPS's own $v0.
+// Must be non static and exported
+int patchStoreButtons(u8 *pad)
 {
-    static int logged = 0;
-    if (!logged) {
-        logged = 1;
+    // we run in kernel but the register will still be what it previously was
+    // withut we get -2147483613 is 0x80000023, which is SCE_ERROR_PRIV_REQUIRED errors
+    u32 k1 = pspSdkSetK1(0);
 
-        debugLog("PATCH reached, pad=%08x", (u32)pad);
+    if (_sceCtrlPeekBufferNegative2 == 0 || pad != g_pad) {
+        pspSdkSetK1(k1);
+        return 0;
     }
 
+    // DS3 mapps R2 and L2 to the PSP's R and L
+    // So we need to check both the PSP's buffer and the DS3's buffer
+    // To allow PSP to still trigger PS1 R1/L1 but prevent the DS3 triggering them
+    // with R2 and L2
+    SceCtrlData2 psp, ds3;
+
+    // TODO - Should i set Right analog stick values here from DS3? 
+    _sceCtrlPeekBufferNegative2(SCE_CRTL_PORT_PSP, &psp, 1);
+    int ds3Resp = _sceCtrlPeekBufferNegative2(SCE_CTRL_PORT_DS3, &ds3, 1);
+
+    // Returns a error or number of read buffers.
+    // Note if no DS3 datasource there will be no buffer so SCE_ERROR_NOT_SUPPORTED will be returned
+    // so this handles no read data allong with errors.
+    // https://github.com/uofw/uofw/blob/28306bb5bd4fcdcc0c1d469bf1f3bdb885dde3e9/src/kd/ctrl/ctrl.c#L2075
+    if (ds3Resp < 1) {
+        pspSdkSetK1(k1);
+        return 0;
+    }
+
+    u8 pspRPressed = !(psp.buttons & SCE_CTRL_RTRIGGER);
+    u8 pspLPressed = !(psp.buttons & SCE_CTRL_LTRIGGER);
+
+    u8 ds3R1Pressed = !(ds3.buttons & SCE_CTRL_R1TRIGGER);
+    u8 ds3R2Pressed = !(ds3.buttons & SCE_CTRL_RTRIGGER);
+
+    u8 ds3L1Pressed = !(ds3.buttons & SCE_CTRL_L1TRIGGER);
+    u8 ds3L2Pressed = !(ds3.buttons & SCE_CTRL_LTRIGGER);
+
+    u16 buttons = *(volatile u16 *)pad;
+
+    // mark all as released
+    buttons |= (PS1_L2_BIT | PS1_R2_BIT | PS1_L1_BIT | PS1_R1_BIT);
+
+    if (ds3L2Pressed)
+        buttons &= ~PS1_L2_BIT;
+    if (ds3R2Pressed)
+        buttons &= ~PS1_R2_BIT;
+
+    if ((pspRPressed && !ds3R2Pressed) || ds3R1Pressed)
+        buttons &= ~PS1_R1_BIT;
+    if ((pspLPressed && !ds3L2Pressed) || ds3L1Pressed)
+        buttons &= ~PS1_L1_BIT;
+
+    *(volatile u16 *)pad = buttons;
+
+    pspSdkSetK1(k1);
+
+    return 0;
+}
+
+// Replaces POPS call to PeekBufferNegative
+// Must be non static and exported
+int patchPeekBufferNegative(SceCtrlData *data, int numBufs, u8 *pad)
+{
     int ret = sceCtrlPeekBufferNegative(data, numBufs);
+
+    g_pad = pad;
 
     // Tell POPS this is an analog pad (ID 0x73, 6 data bytes).
     pad[0x22] = 0x73;
     pad[0x23] = 6;
 
     if (ret > 0) {
-        // PS1 Right stick X
-        // PS1 Right Stick Y
-        pad[3] = 0x80;
-        // PS1 left Stick X. Get the latest sample, i think POPS only asks for 1 anyway
+        pad[2] = data[ret - 1].Rx == 0 ? 0x80 : data[ret - 1].Rx;
+        pad[3] = data[ret - 1].Ry == 0 ? 0x80 : data[ret - 1].Ry;
+
         pad[4] = data[ret - 1].Lx; 
-        // PS1 Left Stick Y
         pad[5] = data[ret - 1].Ly;
 
         // Dont want POPS to run its own stick to buttons mapping
@@ -64,94 +124,31 @@ int patchPeekBufferNegative(SceCtrlData *data, int numBufs, u8 *pad)
     return ret;
 }
 
-static u32 *make_trampoline(void *kernel_func)
-{
-    int sc = sceKernelQuerySystemCall(kernel_func);
-    if (sc < 0) {
-        debugLog("QuerySystemCall failed %x (check exports.exp)", sc);
-        return NULL;
-    }
-
-    // Create a bock of user memory to store the MIPS instructions
-    SceUID uid = sceKernelAllocPartitionMemory(PSP_MEMORY_PARTITION_USER,
-                                               "PopsTramp", PSP_SMEM_Low,
-                                               TRAMP_SIZE, NULL);
-    if (uid < 0) {
-        debugLog("Alloc failed %x", uid);
-        return NULL;
-    }
-
-    u32 *t = (u32 *)sceKernelGetBlockHeadAddr(uid);
-    memset(t, 0, TRAMP_SIZE);
-
-    // $s0 contains POPS pad data. Copy it to $a2 so the hook recieves the pointer to it
-    // as its 3rd argument
-    t[0] = I_MOVE_A2_S0;
-
-    // t[1] = jr $ra, t[2] = syscall. This is a normal syscall stub: the syscall
-    // sits in the delay slot of the jr, so it runs and then control returns
-    // straight to POPS (to the instruction after its original JAL) with the
-    // patch's return value in $v0.
-    // Syscalls are what allow user-mode code to run a kernel function; the
-    // function must be exported in exports.exp.
-    MAKE_SYSCALL_FUNCTION(&t[1], sc);
-
-    // number of instructions have a delay slot. A JAL will first execute the delay slot then 
-    // execute the method.
-    t[3] = NOP; 
-
-    sceKernelDcacheWritebackInvalidateRange(t, TRAMP_SIZE);
-    sceKernelIcacheInvalidateRange(t, TRAMP_SIZE);
-
-    debugLog("Trampoline at %08x, syscall %x", (u32)t, sc);
-    return t;
-}
-
-// This is taken from ARK5 here: https://github.com/PSP-Arkfive/ARK-5/blob/a9b74547c0d1785cc77981462cf095bd5a76434f/SystemControl/src/sctrl_hen.c#L282
-// It does not appear to exist in ARK4 or any other CFW
-// Manually applying it so i am not locked into ARK5
-u32 _sctrlHENFindImportInMod(SceModule * mod, const char *library, u32 nid) {
-    // Invalid Arguments
-    if (mod == NULL || library == NULL) {
-        return 0;
-    }
-
-    for(int i = 0; i < mod->stub_size;) {
-        SceLibraryStubTable *stub = (SceLibraryStubTable *)(mod->stub_top + i);
-
-        if(stub->libname && strcmp(stub->libname, library) == 0) {
-            unsigned int *table = stub->nidtable;
-
-            for(int j = 0; j < stub->stubcount; j++) {
-                if(table[j] == nid) {
-                    return ((u32)stub->stubtable + (j * 8));
-                }
-            }
-        }
-
-        i += (stub->len * 4);
-    }
-
-    return 0;
-}
-
 static int on_start_module(SceModule *mod)
 {
     if (!mod || strcmp(mod->modname, "pops") != 0)
         return 0;
 
-    debugLog("POPS found");
+    _sceCtrlPeekBufferNegative2 = (sceCtrlPeekBufferNegative2_t)sctrlHENFindFunction(
+        "sceController_Service",
+        "sceCtrl",
+        NID_sceCtrlPeekBufferNegative2
+    );
 
-    // Address of POPS's import stub
-    // Use this to build the JAL instruction we modify later
-    // sctrlHENFindImportInMod is a ARK5 and bove feature
-    u32 stub = _sctrlHENFindImportInMod(mod, "sceCtrl", NID_sceCtrlPeekBufferNegative);
-    if (stub == 0 || (stub & 0x80000000)) {
-        debugLog("import lookup failed: %08x", stub);
+    if (_sceCtrlPeekBufferNegative2 == 0) {
+        debugLog("sceCtrlPeekBufferNegative2 not found");
         return 0;
     }
 
-    u32 *tramp = make_trampoline((void *)patchPeekBufferNegative);
+    // Address of POPS's import stub
+    // Use this to build the JAL instruction we modify later
+    u32 stub = _sctrlHENFindImportInMod(mod, "sceCtrl", NID_sceCtrlPeekBufferNegative);
+    if (stub == 0) {
+        debugLog("sceCtrlPeekBufferNegative not found");
+        return 0;
+    }
+
+    u32 *tramp = PATCHING_make_peekBuff_trampoline((void *)patchPeekBufferNegative);
     if (!tramp)
         return 0;
 
@@ -163,15 +160,32 @@ static int on_start_module(SceModule *mod)
     int found = 0;
     // instructions are in 4 byte blocks. So iterate in multiples of four
     for (u32 addr = mod->text_addr; addr < mod->text_addr + mod->text_size; addr += 4) {
-        if (VREAD32(addr) == original) {
+        if (VREAD32(addr) == original) {            
+            found = 1;
+
+            // replace the real NID call instruction at this address with the reampoline
             MAKE_INSTRUCTION(addr, replaced);
 
-            // CPU has caches for data and instructions. As we have manipulated things we need to clear this cache
-            sceKernelDcacheWritebackInvalidateRange((void *)addr, 4);
-            sceKernelIcacheInvalidateRange((void *)addr, 4);
+            MIPS_flush_tramp((void *)addr, 4);
 
-            debugLog("Hook installed at %08x", addr);
-            found = 1;
+            // Now hook POPs storing the buttons
+            // so we can safely inject L2/R2
+            // the store is searched relative to the NID call address so we dont acidentally find false positives.
+            u32 exit_addr  = 0;
+            u32 store_addr = PATCHING_find_store_jump(mod, addr, &exit_addr);
+            if (!store_addr)
+                debugLog("store jump not found; hook 2 skipped");
+            
+            u32 *tStore = NULL;
+            if (store_addr) {
+                tStore = PATCHING_make_store_trampoline((void *)patchStoreButtons, exit_addr);
+
+                if (tStore) {
+                    MAKE_INSTRUCTION(store_addr, JUMP((u32)tStore));
+
+                    MIPS_flush_tramp((void *)store_addr, 4);
+                }
+            }
             break;
         }
     }
@@ -191,5 +205,6 @@ int module_start(SceSize args, void *argp)
 
 int module_stop(SceSize args, void *argp)
 {
+    g_pad = NULL;
     return 0;
 }

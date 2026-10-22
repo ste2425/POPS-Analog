@@ -13,7 +13,7 @@ uint8_t debugEnabed();
     Messages will persist untill pushed out the buffer.
 
     EG:
-    debugLog("Hello from a PSP plugin!");
+    debugLog("Im a little teapot");
     debugLog("Message #%u (tick 0x%x)", tick / 120, tick);
 */
 #define debugLog(...) \

@@ -3,7 +3,7 @@
 // keep this here so we dont get conlfict sceCtrl types
 #include <kubridge.h>
 
-int _debugEnabled = 0;
+int _debugEnabled = 1;
 
 void debugInit() 
 {
