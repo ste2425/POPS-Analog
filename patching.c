@@ -7,7 +7,7 @@
 // create the instruction that moves the PS1 controller data into argument 3 for our sceCtrlPeekBufferNegative hook
 #define I_MOVE_A2_S0 MIPS_ADDU(REG_A2, REG_S0, REG_ZERO)
 
-#define TRAMP_PEEK__SIZE 16
+#define TRAMP_PEEK_SIZE 16
 #define TRAMP_STORE_SIZE  64
 
 #define I_ADDIU_SP_M32 MIPS_ADDIU(REG_SP, REG_SP, -32)
@@ -59,7 +59,7 @@ u32 *PATCHING_make_peekBuff_trampoline(void *kernel_func)
         return NULL;
     }
 
-    u32 *t = MIPS_alloc_tramp("PopsTrampPeek", TRAMP_SIZE);
+    u32 *t = MIPS_alloc_tramp("PopsTrampPeek", TRAMP_PEEK_SIZE);
     if (!t)
         return NULL;
 
