@@ -9,28 +9,13 @@ It also supports injecting data for the second analog stick and L2 / R2 buttons.
 
 If you are a developer that would like to support this too see Extra Data Developer Notes for more information.
 
-<div style="align-items: center;display: grid; grid-template-columns: 1fr 1fr;column-gap: 10px;">
-   <div style="text-align: center;">
-    Demo of analog input in Spyro.
-    <hr>
-   </div>
-   <div style="text-align: center;">
-    Full controller support with my Bluetooth Controler Project.
-    <hr>
-   </div>
-  <div style="text-align: center;">
-  <video width="100%" height="240" controls>
-    <source src="./assets/demo2.mp4">
-  </video>
-  </div>
-  <div>
-  <video width="100%" height="240" controls>
-    <source src="./assets/demo1.mp4">
-  </video>
-  </div>
-</div>
+## Demo of analog input in Spyro.
 
+https://github.com/user-attachments/assets/e6cc3c46-ccb1-413d-95be-90a6869596b8
 
+## Full controller support with my Bluetooth Controler Project.
+
+https://github.com/user-attachments/assets/5dbd9de8-0872-40f1-a407-2ed22103d827
 
 ---
 
